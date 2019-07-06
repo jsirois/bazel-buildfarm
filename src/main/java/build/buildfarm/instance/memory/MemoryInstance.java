@@ -16,7 +16,6 @@ package build.buildfarm.instance.memory;
 
 import static com.google.common.collect.Multimaps.synchronizedSetMultimap;
 import static com.google.common.util.concurrent.Futures.addCallback;
-import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static java.util.Collections.synchronizedSortedMap;
 import static java.util.concurrent.Executors.newCachedThreadPool;
@@ -25,7 +24,6 @@ import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Command;
 import build.bazel.remote.execution.v2.Digest;
-import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.ExecuteOperationMetadata;
 import build.bazel.remote.execution.v2.Platform;
 import build.buildfarm.ac.ActionCache;
@@ -48,7 +46,7 @@ import build.buildfarm.v1test.OperationIteratorToken;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.MultimapBuilder;
 import com.google.common.collect.SetMultimap;
@@ -58,12 +56,10 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.longrunning.Operation;
 import com.google.protobuf.Any;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.rpc.PreconditionFailure;
-import com.google.rpc.PreconditionFailure.Violation;
 import io.grpc.Channel;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
@@ -531,17 +527,21 @@ public class MemoryInstance extends AbstractServerInstance {
   }
 
   private boolean satisfiesRequirements(Platform platform, Command command) {
-    // string compare only
-    // no duplicate names
-    ImmutableMap.Builder<String, String> provisionsBuilder =
-        new ImmutableMap.Builder<String, String>();
+    // + String compare only.
+    // + Duplicate names are allowed since we implicitly inject zero or more "execution-policy" in:
+    //     `build.buildfarm.worker.Executor.runInterruptible`
+    // + Which are then re-constituted as a Platform with possibly multiple "execution-policy"
+    //   Properties in:
+    //     `build.buildfarm.worker.operationqueue.Worker.getPlatform`.
+    ImmutableSetMultimap.Builder<String, String> provisionsBuilder =
+        new ImmutableSetMultimap.Builder<>();
     for (Platform.Property property : platform.getPropertiesList()) {
       provisionsBuilder.put(property.getName(), property.getValue());
     }
-    Map<String, String> provisions = provisionsBuilder.build();
+    ImmutableSetMultimap<String, String> provisions = provisionsBuilder.build();
     for (Platform.Property property : command.getPlatform().getPropertiesList()) {
       if (!provisions.containsKey(property.getName()) ||
-          !provisions.get(property.getName()).equals(property.getValue())) {
+          !provisions.get(property.getName()).contains(property.getValue())) {
         return false;
       }
     }
