@@ -71,7 +71,7 @@ import com.google.common.cache.RemovalNotification;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -652,18 +652,22 @@ public class MemoryInstance extends AbstractServerInstance {
     }
   }
 
-  private boolean satisfiesRequirements(Platform platform, Command command) throws InterruptedException {
-    // string compare only
-    // no duplicate names
-    ImmutableMap.Builder<String, String> provisionsBuilder =
-        new ImmutableMap.Builder<String, String>();
+  private boolean satisfiesRequirements(Platform platform, Command command) {
+    // + String compare only.
+    // + Duplicate names are allowed since we implicitly inject zero or more "execution-policy" in:
+    //     `build.buildfarm.worker.Executor.runInterruptible`
+    // + Which are then re-constituted as a Platform with possibly multiple "execution-policy"
+    //   Properties in:
+    //     `build.buildfarm.worker.operationqueue.Worker.getPlatform`.
+    ImmutableSetMultimap.Builder<String, String> provisionsBuilder =
+        new ImmutableSetMultimap.Builder<>();
     for (Platform.Property property : platform.getPropertiesList()) {
       provisionsBuilder.put(property.getName(), property.getValue());
     }
-    Map<String, String> provisions = provisionsBuilder.build();
+    ImmutableSetMultimap<String, String> provisions = provisionsBuilder.build();
     for (Platform.Property property : command.getPlatform().getPropertiesList()) {
       if (!provisions.containsKey(property.getName()) ||
-          !provisions.get(property.getName()).equals(property.getValue())) {
+          !provisions.get(property.getName()).contains(property.getValue())) {
         return false;
       }
     }
