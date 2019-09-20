@@ -413,10 +413,16 @@ public class Worker {
       return;
     }
 
+    logger.fine(String.format("Configured root: %s", root));
+
     WorkerContext context = new WorkerContext() {
       Map<String, ExecutionPolicy> policies = uniqueIndex(
           config.getExecutionPoliciesList(),
           (policy) -> policy.getName());
+
+      {
+        logger.fine(String.format("Configured execution policies: %s", policies));
+      }
 
       @Override
       public String getName() {

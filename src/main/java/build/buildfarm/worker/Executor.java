@@ -45,6 +45,7 @@ import com.google.protobuf.util.Timestamps;
 import com.google.rpc.Code;
 import io.grpc.Deadline;
 import java.nio.file.Path;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -156,16 +157,18 @@ class Executor implements Runnable {
     workerContext.logInfo("Executor: Operation " + operation.getName() + " Executing command");
 
     Platform platform = operationContext.command.getPlatform();
-    ImmutableList.Builder<ExecutionPolicy> policies = ImmutableList.builder();
+    ImmutableList.Builder<ExecutionPolicy> policyBuilder = ImmutableList.builder();
     ExecutionPolicy defaultPolicy = workerContext.getExecutionPolicy("");
     if (defaultPolicy != null) {
-      policies.add(defaultPolicy);
+      policyBuilder.add(defaultPolicy);
     }
     for (Property property : platform.getPropertiesList()) {
       if (property.getName().equals("execution-policy")) {
-        policies.add(workerContext.getExecutionPolicy(property.getValue()));
+        policyBuilder.add(workerContext.getExecutionPolicy(property.getValue()));
       }
     }
+    ImmutableList<ExecutionPolicy> policies = policyBuilder.build();
+    logger.fine(String.format("Execution policies: %s", policies));
 
     ActionResult.Builder resultBuilder = operationContext.executeResponse
         .getResultBuilder();
@@ -182,7 +185,7 @@ class Executor implements Runnable {
           "", // executingMetadata.getStdoutStreamName(),
           "", // executingMetadata.getStderrStreamName(),
           resultBuilder,
-          policies.build());
+          policies);
     } catch (IOException e) {
       logger.log(SEVERE, "error executing operation " + operation.getName(), e);
       operationContext.poller.pause();
@@ -282,15 +285,22 @@ class Executor implements Runnable {
             (policy) -> policy.getWrapper().getPath()));
     arguments.addAll(command.getArgumentsList());
 
+    ImmutableList<String> args = arguments.build();
+    File pwd = execDir.toAbsolutePath().toFile();
+
     ProcessBuilder processBuilder =
-        new ProcessBuilder(arguments.build())
-            .directory(execDir.toAbsolutePath().toFile());
+        new ProcessBuilder(args)
+            .directory(pwd);
 
     Map<String, String> environment = processBuilder.environment();
     environment.clear();
     for (Command.EnvironmentVariable environmentVariable : command.getEnvironmentVariablesList()) {
       environment.put(environmentVariable.getName(), environmentVariable.getValue());
     }
+
+    logger.fine(String.format("ENV: %s", environment));
+    logger.fine(String.format("PWD: %s", pwd));
+    logger.fine(String.format("ARGS: %s", args));
 
     final Write stdoutWrite, stderrWrite;
 
