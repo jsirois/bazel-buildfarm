@@ -653,6 +653,8 @@ public class MemoryInstance extends AbstractServerInstance {
   }
 
   private boolean satisfiesRequirements(Platform platform, Command command) {
+    logger.fine(String.format("Checking if requirements are satisfied for %s", command));
+
     // + String compare only.
     // + Duplicate names are allowed since we implicitly inject zero or more "execution-policy" in:
     //     `build.buildfarm.worker.Executor.runInterruptible`
