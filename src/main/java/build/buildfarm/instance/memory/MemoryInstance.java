@@ -670,6 +670,8 @@ public class MemoryInstance extends AbstractServerInstance {
     for (Platform.Property property : command.getPlatform().getPropertiesList()) {
       if (!provisions.containsKey(property.getName()) ||
           !provisions.get(property.getName()).contains(property.getValue())) {
+        logger.fine(String.format("Platform.Property NOT satisfied: %s", property));
+        logger.fine(String.format("Provisioned for: %s", provisions));
         return false;
       }
     }

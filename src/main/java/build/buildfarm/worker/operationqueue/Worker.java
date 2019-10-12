@@ -394,7 +394,7 @@ public class Worker {
         uploader);
   }
 
-  public Platform getPlatform() {
+  private Platform getPlatform() {
     Platform.Builder platform = config.getPlatform().toBuilder();
     for (ExecutionPolicy policy : config.getExecutionPoliciesList()) {
       platform.addPropertiesBuilder()
@@ -519,7 +519,7 @@ public class Worker {
           }
         };
         while (!dedupMatchListener.getMatched()) {
-          operationQueueInstance.match(config.getPlatform(), dedupMatchListener);
+          operationQueueInstance.match(getPlatform(), dedupMatchListener);
         }
       }
 
